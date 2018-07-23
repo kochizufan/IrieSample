@@ -3,8 +3,10 @@
 <head>
     <title>GSI Maps</title>
     <link rel="stylesheet" href="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.0.3/css/ol.css" type="text/css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol3-contextmenu@2.5.0/build/ol3-contextmenu.min.css" type="text/css">
     <script src="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.0.3/build/ol.js" type="text/javascript"></script>
     <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ol3-contextmenu@2.5.0/build/ol3-contextmenu.min.js"></script>
 </head>
 <body>
 <div id="map" class="map"></div>
@@ -49,7 +51,83 @@
         })
     });
 
-    map.on("click", function(evt) {
+    var normalContextMenu = {
+        text: 'マーカー追加',
+        callback: addNewMarker
+    };
+
+    var removeContextMenu = {
+        text: 'マーカー削除',
+        callback: removeMarker
+    };
+
+    var editContextMenu = {
+        text: 'データ編集',
+        callback: function() { alert('未実装'); }
+    };
+
+    var contextmenu = new ContextMenu({
+        width: 170,
+        default_items: false, //default_items are (for now) Zoom In/Zoom Out
+        items: [ normalContextMenu ]
+    });
+    map.addControl(contextmenu);
+    var restore = false;
+
+    contextmenu.on('open', function(evt){
+        var feature = map.forEachFeatureAtPixel(evt.pixel, function(ft, l){
+            return ft;
+        }, {
+            layerFilter: function(layer) {
+                return layer.get('name') == 'marker';
+            }
+        });
+        if (feature) {
+            contextmenu.clear();
+            removeContextMenu.data = {
+                marker: feature
+            };
+            contextmenu.push(removeContextMenu);
+            contextmenu.push(editContextMenu);
+            restore = true;
+        } else if (restore) {
+            contextmenu.clear();
+            contextmenu.push(normalContextMenu);
+            restore = false;
+        }
+    });
+
+    function addNewMarker(arg, map) {
+        var lnglat = ol.proj.transform(arg.coordinate, 'EPSG:3857', 'EPSG:4326');
+
+        var layer = map.getLayer('marker');
+        var src = layer.getSource();
+        var data = {
+            lnglat: lnglat,
+            geometry: new ol.geom.Point(arg.coordinate)
+        };
+        var iconFeature = new ol.Feature(data);
+        if (!markerStyle) markerStyle = markerDefaultStyle;
+        else if (typeof markerStyle == 'string') {
+            markerStyle = new ol.style.Style({
+                image: new ol.style.Icon(({
+                    anchor: [0.5, 1.0],
+                    anchorXUnits: 'fraction',
+                    anchorYUnits: 'fraction',
+                    src: markerStyle
+                }))
+            });
+        }
+        iconFeature.setStyle(markerStyle);
+        src.addFeature(iconFeature);
+    }
+
+    function removeMarker (arg, map) {
+        var marker = arg.data.marker;
+        map.getLayer('marker').getSource().removeFeature(marker);
+    }
+
+    /*map.on("click", function(evt) {
         var lnglat = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
 
         var layer = map.getLayer('marker');
@@ -72,7 +150,7 @@
         }
         iconFeature.setStyle(markerStyle);
         src.addFeature(iconFeature);
-    });
+    });*/
 
     //マーカードラッグ用(Exampleよりコピペ)
     /**
